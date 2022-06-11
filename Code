@@ -1,0 +1,912 @@
+import random as rd
+import numpy as np
+from tkinter import Tk, Canvas, Button, RIGHT, LEFT
+import pyscreenshot
+import os
+os.chdir('C:/Users/Bilal/Desktop/TIPE Épidémie/Python/Automate cellulaire')
+
+n = 30 # Dimension du monde
+a = 15 # Taille d'une cellule
+p1=0.5 # Infecté -> Décédé
+p2=0.32 # Sain -> Infecté
+l=0
+f=open("Infos.txt",'w')
+f.write("p2="+str(p2)+": \n")
+
+sain=n*n-1
+d=0
+inf=1
+im=0
+
+def bernoulli(p):
+    x=rd.random()
+    if x<=p:
+        return 1
+    else: return 0
+
+# Définition des matrices d'évolution de l'automate
+cell = np.zeros((n,n),dtype=int)
+etat = np.zeros((n,n),dtype=int)
+
+# Définition de l'alphabet de l'automate dans un dictionnaire Python
+state = {"SAIN":0,"INF":1, "IM":2, "D":3}
+
+# Calcule et dessine la prochaine génération
+def iterer():
+    global flag
+    global l
+    appliquer_regles()
+    f.write("Image "+str(l)+": sain="+str(sain)+" ; "+"infecté="+str(inf)+" ; "+"immunisé="+str(im)+" ; "+"décedé="+str(d)+"\n")
+    image = pyscreenshot.grab(bbox=(0, 0, 450, 510))
+    # image.show()
+    image.save("Image"+str(l)+" ("+str(p2)+").png")
+    l+=1
+    dessiner()
+    if flag==1:
+        fenetre.after(100, iterer)
+    else:
+        flag=0
+
+# Initialisation de l'automate
+def initialiser_monde():
+    etat[0:n,0:n] = state["SAIN"]
+    # Création de la grille
+    for x in range(n):
+        for y in range(n):
+            cell[x,y] = canvas.create_rectangle((x*a, y*a, (x+1)*a, \
+                         (y+1)*a), outline="gray", fill="white")
+
+# Voisinage de Moore
+def est_exposee(i,j):
+    if i==0 and j==0:
+        return (etat[0][1]-1)*(etat[1][1]-1)*(etat[1][0]-1)==0
+    elif i==0 and j==n-1:
+        return (etat[0][n-2]-1)*(etat[1][n-2]-1)*(etat[1][n-1]-1)==0
+    elif i==n-1 and j==0:
+        return (etat[n-1][1]-1)*(etat[n-2][1]-1)*(etat[n-2][0]-1)==0
+    elif i==n-1 and j==n-1:
+        return (etat[n-1][n-2]-1)*(etat[n-2][n-2]-1)*(etat[n-2][n-1]-1)==0
+    elif i==0:
+        return (etat[0][j-1]-1)*(etat[0][j+1]-1)*(etat[1][j-1]-1)*(etat[1][j]-1)*(etat[1][j+1]-1)==0
+    elif i==n-1:
+        return (etat[n-1][j-1]-1)*(etat[n-2][j-1]-1)*(etat[n-2][j]-1)*(etat[n-2][j+1]-1)*(etat[n-1][j+1]-1)==0
+    elif j==0:
+        return (etat[i-1][0]-1)*(etat[i-1][1]-1)*(etat[i][1]-1)*(etat[i+1][1]-1)*(etat[i+1][0]-1)==0
+    elif j==n-1:
+        return (etat[i-1][n-1]-1)*(etat[i-1][n-2]-1)*(etat[i][n-2]-1)*(etat[i+1][n-2]-1)*(etat[i+1][n-1]-1)==0
+    else:
+        return (etat[i-1][j-1]-1)*(etat[i-1][j]-1)*(etat[i-1][j+1]-1)*(etat[i+1][j-1]-1)*(etat[i+1][j]-1)*(etat[i+1][j+1]-1)*(etat[i][j-1]-1)*(etat[i][j+1]-1)==0
+
+# Calcul de la prochaine génération
+def appliquer_regles():
+    global etat
+    global d
+    global inf
+    global im
+    global sain
+
+    temp = np.zeros((n,n))
+    for x in range(n):
+        for y in range(n):
+            if etat[x][y] == state["D"]:
+                temp[x][y] = state["D"]
+            if etat[x][y] == state["IM"]:
+                temp[x][y] = state["IM"]
+            if etat[x][y] == state["SAIN"]:
+                if bernoulli(p2) and est_exposee(x,y):
+                    temp[x][y] = state["INF"]
+                    inf+=1
+                    sain-=1
+                else:
+                    temp[x][y] = state["SAIN"]
+            if etat[x][y] == state["INF"]:
+                if bernoulli(p1):
+                    temp[x][y] = state["D"]
+                    d+=1
+                    inf-=1
+                else:
+                    temp[x][y] = state["IM"]
+                    im+=1
+                    inf-=1
+    etat = temp.copy() # Copie la matrice temporaire dans l'automate
+
+# Dessine toutes les cellules
+def dessiner():
+    for x in range(n):
+        for y in range(n):
+            if etat[x,y]==state["SAIN"]:
+                coul = "white"
+            elif etat[x,y]==state["INF"]:
+                coul="red"
+            elif etat[x,y]==state["IM"]:
+                coul="green"
+            else:
+                coul = "black"
+            canvas.itemconfig(cell[x,y], fill=coul)
+
+# Arrêt de l'animation
+def stop():
+    global flag
+    flag=0
+
+# Début de l'animation
+def start():
+    global flag
+    if flag==0:
+        flag=1
+    iterer()
+
+# Animation pas à pas
+def pasapas():
+    global flag
+    flag=2
+    iterer()
+
+# Fonction de traitement du clic gauche de la souris
+def  SelectionCellule(event):
+    x, y = event.x//a, event.y//a
+    etat[x,y] = (etat[x,y]+1)%2
+    if etat[x,y]==state["SAIN"]:
+        color = "red"
+        canvas.itemconfig(cell[x][y], fill=color)
+
+# Définition de l'interface graphique
+fenetre = Tk()
+fenetre.title("Propagation d'une épidémie")
+canvas = Canvas(fenetre, width=a*n+1, height=a*n+1, highlightthickness=0)
+fenetre.wm_attributes("-topmost", True)
+
+# Appelle la fonction SelectionCellule sur click gauche
+canvas.bind("<Button-1>", SelectionCellule)
+canvas.pack()
+
+# Définition des boutons de commande
+bou1 = Button(fenetre,text='Exit', width=8, command=fenetre.destroy)
+bou1.pack(side=RIGHT)
+bou2 = Button(fenetre, text='Start', width=8, command=start)
+bou2.pack(side=LEFT)
+bou3 = Button(fenetre, text='Stop', width=8, command=stop)
+bou3.pack(side=LEFT)
+bou4 = Button(fenetre, text='Step', width=8, command=pasapas)
+bou4.pack(side=LEFT)
+
+# Lancement de l'automate
+flag = 0
+initialiser_monde()
+dessiner()
+iterer()
+fenetre.mainloop()
+
+f.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import random as rd
+import numpy as np
+import matplotlib.pyplot as plt
+
+n=30
+p1=0.5
+p2=0.3
+
+# Créatoin de la grille
+def grille():
+    M=[[0]*n for i in range(n)]
+    return np.array(M)
+
+# Infection d'un individu choisit aléatoirement
+def init():
+    G=grille()
+    i=rd.randrange(n)
+    j=rd.randrange(n)
+    G[i][j]=1
+    return G
+
+# Compte le nombre d'individus sain, infecté, rétabli et décédé
+def compte(G):
+    L=[0,0,0,0]
+    for i in range(n):
+        for j in range(n):
+            L[G[i][j]]+=1
+    return L
+
+# Voisinage de Moore
+def est_exposee(G,i,j):
+    if i==0 and j==0:
+        return (G[0][1]-1)*(G[1][1]-1)*(G[1][0]-1)==0
+    elif i==0 and j==n-1:
+        return (G[0][n-2]-1)*(G[1][n-2]-1)*(G[1][n-1]-1)==0
+    elif i==n-1 and j==0:
+        return (G[n-1][1]-1)*(G[n-2][1]-1)*(G[n-2][0]-1)==0
+    elif i==n-1 and j==n-1:
+        return (G[n-1][n-2]-1)*(G[n-2][n-2]-1)*(G[n-2][n-1]-1)==0
+    elif i==0:
+        return (G[0][j-1]-1)*(G[0][j+1]-1)*(G[1][j-1]-1)*(G[1][j]-1)*(G[1][j+1]-1)==0
+    elif i==n-1:
+        return (G[n-1][j-1]-1)*(G[n-2][j-1]-1)*(G[n-2][j]-1)*(G[n-2][j+1]-1)*(G[n-1][j+1]-1)==0
+    elif j==0:
+        return (G[i-1][0]-1)*(G[i-1][1]-1)*(G[i][1]-1)*(G[i+1][1]-1)*(G[i+1][0]-1)==0
+    elif j==n-1:
+        return (G[i-1][n-1]-1)*(G[i-1][n-2]-1)*(G[i][n-2]-1)*(G[i+1][n-2]-1)*(G[i+1][n-1]-1)==0
+    else:
+        return (G[i-1][j-1]-1)*(G[i-1][j]-1)*(G[i-1][j+1]-1)*(G[i+1][j-1]-1)*(G[i+1][j]-1)*(G[i+1][j+1]-1)*(G[i][j-1]-1)*(G[i][j+1]-1)==0
+
+# Voisinage de von Neumann
+def est_exposee_bis(G,i,j):
+    if i==0 and j==0:
+        return (G[0][1]-1)*(G[1][0]-1)==0
+    elif i==0 and j==n-1:
+        return (G[0][n-2]-1)*(G[1][n-1]-1)==0
+    elif i==n-1 and j==0:
+        return (G[n-1][1]-1)*(G[n-2][0]-1)==0
+    elif i==n-1 and j==n-1:
+        return (G[n-1][n-2]-1)*(G[n-2][n-1]-1)==0
+    elif i==0:
+        return (G[0][j-1]-1)*(G[0][j+1]-1)*(G[1][j]-1)==0
+    elif i==n-1:
+        return (G[n-1][j-1]-1)*(G[n-2][j]-1)*(G[n-2][j+1]-1)==0
+    elif j==0:
+        return (G[i-1][0]-1)*(G[i][1]-1)*(G[i+1][0]-1)==0
+    elif j==n-1:
+        return (G[i-1][n-1]-1)*(G[i][n-2]-1)*(G[i+1][n-1]-1)==0
+    else:
+        return (G[i-1][j]-1)*(G[i+1][j]-1)*(G[i][j-1]-1)*(G[i][j+1]-1)==0
+
+# Renvoie 1 avec probabilité p, 0 sinon
+def bernoulli(p):
+    x=rd.random()
+    if x<=p:
+        return 1
+    else:
+        return 0
+
+# Applique les règles de transition pour passer de t_{i} à t_{i+1}
+def suivant(G,p1,p2):
+    H=G.copy()
+    for i in range(n):
+        for j in range(n):
+            if G[i][j]==1:
+                if bernoulli(p1)==1:
+                    H[i][j]=3
+                else:
+                    H[i][j]=2
+            elif G[i][j]==0:
+                if bernoulli(p2)==1 and est_exposee(G,i,j):
+                    H[i][j]=1
+    return H
+
+# Calcule la moyenne de Pi sur 400 essais pour n,p1 et p2 fixés
+def simulation(n,p1,p2):
+    s=0
+    for i in range(400):
+        G=init()
+        L=compte(G)
+        while L[1]!=0:
+            G=suivant(G,p1,p2)
+            L=compte(G)
+        s+=(L[2]+L[3])/(n**2)
+    return s/400
+
+# Calcule Pi critique par dichotomie
+def seuil(Lp2,Lxatteint):
+    n=len(Lp2)
+    g,d=0,n-1
+    while d!=g+1:
+        m=(g+d)//2
+        if Lxatteint[m]==0.5:
+            return [Lp2[m],Lp2[m]]
+        elif Lxatteint[m]>0.5:
+            d=m
+        else:
+            g=m
+    return [Lp2[g],Lp2[d]]
+
+# Tracé de Pi en fonction de p2
+X=np.linspace(0,1,100)
+Y=[]
+for i in range(len(X)):
+    Y.append(simulation(n,0.5,X[i]))
+    print(i)
+plt.plot(X,Y)
+plt.show()
+print(seuil(X,Y))
+
+
+
+
+
+
+from time import clock
+from random import randint,random
+import matplotlib.pyplot as plt
+from math import *
+
+def creation_grille(p,n):
+    G=[[0]*n for i in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if random()<=p:
+                G[i][j]=1
+    return G
+
+# Représentation naïve d'une partition
+def creer_naif(n):
+    return [[i] for i in range(n)]
+
+def rep_naif(L,x):
+    for y in L:
+        if x in y:
+            return y[0]
+
+def fusion_naif(L,x,y):
+    ix=0
+    iy=0
+    for i in range(len(L)):
+        if x in L[i]:
+            ix=i
+        elif y in L[i]:
+            iy=i
+    if ix<iy:
+        return L[:ix]+L[ix+1:iy]+L[iy+1:]+[L[ix]+L[iy]]
+    else:
+        return L[:iy]+L[iy+1:ix]+L[ix+1:]+[L[ix]+L[iy]]
+
+# Représenation d'une partition efficace (Union-find)
+def creer(n):
+    p=[]
+    r=[]
+    for i in range(n):
+        p.append(i)
+        r.append(i)
+    return (p,r)
+
+def rep(u,x):
+    (p,r)=u
+    if p[x]!=x:
+        p[x]=rep(u,p[x])
+    return p[x]
+
+def fusion(u,x,y):
+    (p,r)=u
+    xr=rep(u,x)
+    yr=rep(u,y)
+    if xr!=yr:
+        if r[xr]<r[yr]:
+            p[xr]=yr
+        elif r[xr]>r[yr]:
+            p[yr]=xr
+        else:
+            p[yr]=xr
+            r[xr]+=1
+
+# Hoshen-Kolpen naïf
+def hoshen_kopelman_naif(G):
+    n=len(G)
+    rmax=0
+    R=[[0]*n for i in range(n)]
+    L=creer_naif(n*n)
+    for i in range(n):
+        for j in range(n):
+            if G[i][j]==1:
+                g=i*n+(j-1)
+                h=(i-1)*n+j
+                if j>0:
+                    rg=R[i][j-1]
+                else:
+                    rg=0
+                if i>0:
+                    rh=R[i-1][j]
+                else:
+                    rh=0
+                if rg==0 and rh==0:
+                    rmax+=1
+                    R[i][j]=rmax
+                elif rg!=0 and rh==0:
+                    i0=rep_naif(L,g)//n
+                    j0=rep_naif(L,g)%n
+                    R[i][j]=R[i0][j0]
+                    L=fusion_naif(L,i*n+j,g)
+                elif rg==0 and rh!=0:
+                    i0=rep_naif(L,h)//n
+                    j0=rep_naif(L,h)%n
+                    R[i][j]=R[i0][j0]
+                    L=fusion_naif(L,i*n+j,h)
+                else:
+                    L=fusion_naif(L,h,g)
+                    L=fusion_naif(L,i*n+j,g)
+                    R[i][j]=R[i][j-1]
+    for i in range(n):
+        for j in range(n):
+            i0=rep_naif(L,i*n+j)//n
+            j0=rep_naif(L,i*n+j)%n
+            R[i][j]=R[i0][j0]
+    return R
+
+# Hoshen-Kopelman efficace (Union-find)
+def hoshen_kopelman(G):
+    n=len(G)
+    rmax=0
+    R=[[0]*n for i in range(n)]
+    u=creer(n*n)
+    (p,r)=u
+    for i in range(n):
+        for j in range(n):
+            if G[i][j]==1:
+                g=i*n+(j-1)
+                h=(i-1)*n+j
+                if j>0:
+                    rg=R[i][j-1]
+                else:
+                    rg=0
+                if i>0:
+                    rh=R[i-1][j]
+                else:
+                    rh=0
+                if rg==0 and rh==0:
+                    rmax+=1
+                    R[i][j]=rmax
+                elif rg!=0 and rh==0:
+                    i0=rep(u,g)//n
+                    j0=rep(u,g)%n
+                    R[i][j]=R[i0][j0]
+                    p[i*n+j]=i0*n+j0
+                elif rg==0 and rh!=0:
+                    i0=rep(u,h)//n
+                    j0=rep(u,h)%n
+                    R[i][j]=R[i0][j0]
+                    p[i*n+j]=i0*n+j0
+                else:
+                    fusion(u,h,g)
+                    p[i*n+j]=rep(u,g)
+                    R[i][j]=R[i][j-1]
+    for i in range(n):
+        for j in range(n):
+            i0=rep(u,i*n+j)//n
+            j0=rep(u,i*n+j)%n
+            R[i][j]=R[i0][j0]
+    return R
+
+# Comparaison des algorithmes Hoshen-Kopelman naïf et efficace (Union-find)
+def compare():
+    X=[10,30,50,80,100,125,150,175,200,225]
+    Yn=[]
+    Y=[]
+    for x in X:
+        g=creation_grille(0.5,x)
+        t=clock()
+        hoshen_kopelman_naif(g)
+        t=clock()-t
+        Yn.append(t)
+        print(x)
+        t=clock()
+        hoshen_kopelman(g)
+        t=clock()-t
+        Y.append(t)
+        print(x)
+    plt.plot(X,Yn,label="Naïf")
+    plt.plot(X,Y,label="Union-Find")
+    plt.scatter(X,Yn)
+    plt.scatter(X,Y)
+    plt.xlabel("n")
+    plt.ylabel("t")
+    plt.legend(loc="upper left")
+    plt.show()
+
+# Test de Hoshen_Kopelman efficace (Union-find) pour des n plus grand
+def test_unionfind():
+    X=[100,500,800,1000,1500,2000,3000,4000]
+    Y=[]
+    for x in X:
+        g=creation_grille(0.5,x)
+        t=clock()
+        hoshen_kopelman(g)
+        t=clock()-t
+        Y.append(t)
+        print(x)
+    plt.plot(X,Y,label="Union-Find")
+    plt.scatter(X,Y)
+    plt.xlabel("n")
+    plt.ylabel("t")
+    plt.legend(loc="upper left")
+    plt.show()
+
+
+
+
+import random as rd
+import numpy as np
+from tkinter import Tk, Canvas, Button, RIGHT, LEFT
+import pyscreenshot
+import os
+os.chdir('C:/Users/Bilal/Desktop/TIPE Épidémie/Python/Percolation')
+
+n = 30 # Dimension du monde
+a = 15 # Taille d'une cellule
+p=0.5
+k=0
+
+L=[]
+debut=True
+
+def bernoulli(p):
+    x=rd.random()
+    if x<=p:
+        return 1
+    else: return 0
+
+# Définition des matrices d'évolution de l'automate
+cell = np.zeros((n,n),dtype=int)
+etat = np.zeros((n,n),dtype=int)
+
+# Définition de l'alphabet de l'automate dans un dictionnaire Python
+state = {"F":0,"O":1, "INF":2}
+
+# Calcule et dessine la prochaine génération
+def iterer():
+    global debut
+    if debut:
+        debut=False
+    else:
+        appliquer_regles()
+        dessiner()
+
+# Initialisation de l'automate
+def initialiser_monde():
+    global L
+    etat[0:n,0:n] = state["F"]
+    # Création de la grille
+    for x in range(n):
+        for y in range(n):
+            cell[x,y] = canvas.create_rectangle((x*a, y*a, (x+1)*a, \
+                         (y+1)*a), outline="gray", fill="white")
+            if bernoulli(p):
+                etat[x][y]=state["O"]
+                coul="white"
+            else:
+                etat[x][y]=state["F"]
+                coul="black"
+            canvas.itemconfig(cell[x][y], fill=coul)
+    for j in range(n):
+        if etat[j][0]==state["O"]:
+            etat[j][0]=state["INF"]
+            L.append((j,0))
+            canvas.itemconfig(cell[j][0], fill="red")
+
+# Calcule la prochaine génération
+def appliquer_regles():
+    global etat
+    global f
+    global o
+    global inf
+    global L
+
+    temp = np.zeros((n,n))
+    while L!=[]:
+        (i,j)=L.pop()
+        if i>0 and etat[i-1][j]==1:
+            etat[i-1][j]=2
+            L.append((i-1,j))
+        if i<n-1 and etat[i+1][j]==1:
+            etat[i+1][j]=2
+            L.append((i+1,j))
+        if j>0 and etat[i][j-1]==1:
+            etat[i][j-1]=2
+            L.append((i,j-1))
+        if j<n-1 and etat[i][j+1]==1:
+            etat[i][j+1]=2
+            L.append((i,j+1))
+
+# Dessine toutes les cellules
+def dessiner():
+    for x in range(n):
+        for y in range(n):
+            if etat[x,y]==state["F"]:
+                coul = "black"
+            elif etat[x,y]==state["O"]:
+                coul="white"
+            elif etat[x,y]==state["INF"]:
+                coul="red"
+            canvas.itemconfig(cell[x,y], fill=coul)
+
+def creer(n):
+    p=[]
+    r=[]
+    for i in range(n):
+        p.append(i)
+        r.append(i)
+    return (p,r)
+
+def rep(u,x):
+    (p,r)=u
+    if p[x]!=x:
+        p[x]=rep(u,p[x])
+    return p[x]
+
+def fusion(u,x,y):
+    (p,r)=u
+    xr=rep(u,x)
+    yr=rep(u,y)
+    if xr!=yr:
+        if r[xr]<r[yr]:
+            p[xr]=yr
+        elif r[xr]>r[yr]:
+            p[yr]=xr
+        else:
+            p[yr]=xr
+            r[xr]+=1
+
+def hoshen_kopelman():
+    global etat
+    global n
+    G=etat
+    for i in range(n):
+        for j in range(n):
+            if etat[i][j]==2:
+                etat[i][j]=1
+            else:
+                etat[i][j]=0
+    n=len(G)
+    rmax=0
+    R=[[0]*n for i in range(n)]
+    u=creer(n*n)
+    (p,r)=u
+    for i in range(n):
+        for j in range(n):
+            if G[i][j]==1:
+                g=i*n+(j-1)
+                h=(i-1)*n+j
+                if j>0:
+                    rg=R[i][j-1]
+                else:
+                    rg=0
+                if i>0:
+                    rh=R[i-1][j]
+                else:
+                    rh=0
+                if rg==0 and rh==0:
+                    rmax+=1
+                    R[i][j]=rmax
+                elif rg!=0 and rh==0:
+                    i0=rep(u,g)//n
+                    j0=rep(u,g)%n
+                    R[i][j]=R[i0][j0]
+                    p[i*n+j]=i0*n+j0
+                elif rg==0 and rh!=0:
+                    i0=rep(u,h)//n
+                    j0=rep(u,h)%n
+                    R[i][j]=R[i0][j0]
+                    p[i*n+j]=i0*n+j0
+                else:
+                    fusion(u,h,g)
+                    p[i*n+j]=rep(u,g)
+                    R[i][j]=R[i][j-1]
+    for i in range(n):
+        for j in range(n):
+            i0=rep(u,i*n+j)//n
+            j0=rep(u,i*n+j)%n
+            R[i][j]=R[i0][j0]
+    print(R)
+    C=["#800080","#CC66FF","#FF00FF","#000080","#0000FF","#008080","#66FFCC","#00FFFF","#008000","#00FF00","#808000","#FFFF00","#FF6600","#FFCC66","#800000","#FF0000","#808080","#C0C0C0","CCFFFF","CC9900"]
+    L=[-1]*50
+    l=0
+    for i in range(n):
+        for j in range(n):
+            x=R[i][j]
+            if x!=0:
+                if L[x]==-1:
+                    L[x]=l
+                    coul=C[l]
+                    l+=1
+                else:
+                    coul=C[L[x]]
+                canvas.itemconfig(cell[i,j], fill=coul)
+
+# Début de l'animation
+def start():
+    iterer()
+
+# Fonction pour faire une capture d'écran
+def screen():
+    global k
+    image = pyscreenshot.grab(bbox=(0, 0, 450, 510))
+    image.save("Image"+str(k)+" ("+str(p)+").png")
+    k+=1
+
+# Définition de l'interface graphique
+fenetre = Tk()
+fenetre.title("Percolation")
+canvas = Canvas(fenetre, width=a*n+1, height=a*n+1, highlightthickness=0)
+fenetre.wm_attributes("-topmost", True)
+
+canvas.pack()
+
+# Définition des boutons de commande
+bou1 = Button(fenetre,text='Exit', width=8, command=fenetre.destroy)
+bou1.pack(side=RIGHT)
+bou2 = Button(fenetre, text='Start', width=8, command=start)
+bou2.pack(side=LEFT)
+bou3 = Button(fenetre, text='Hoshen_Kopelman', width=15, command=hoshen_kopelman)
+bou3.pack(side=LEFT)
+bou4 = Button(fenetre, text="Capture d'écran", width=15, command=screen)
+bou4.pack(side=LEFT)
+
+
+# Lancement de l'automate
+initialiser_monde()
+dessiner()
+iterer()
+fenetre.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import networkx as nx
+from networkx.generators.classic import empty_graph
+import matplotlib.pyplot as plt
+import random as rd
+
+# Renvoie 1 avec probabilité p, 0 sinon
+def bernoulli(p):
+    x=rd.random()
+    if x<=p:
+        return 1
+    else:
+        return 0
+
+# Affichage de G(n,p)
+def erdos_renyi(n,p):
+    G=empty_graph(n)
+    for i in range(n):
+        for j in range(i+1,n):
+            if bernoulli(p):
+                G.add_edge(i,j, styl='solid')
+    pos=nx.spring_layout(G)
+    L=nx.degree(G)
+    L=[L[i] for i in range(n)]
+    m=max(L)
+    C=["#5F2879","#00418D","#00C2DE","#00BA71","#FAD717","#FA8901","#F43545"]
+    colors=[]
+    for i in range(n):
+        c=int((L[i]/m)*6)
+        colors.append(C[c])
+    nx.draw(G,node_color=colors, edge_color='black',node_size=10)
+    plt.show()
+
+
+
+
+
+import numpy as np
+from random import randint,random
+import matplotlib.pyplot as plt
+from math import *
+
+# Renvoie la liste des composantes connexes de G
+def compo_connexes(G):
+    n=len(G)
+    deja_vus = [False]*n
+    liste_cc = []
+    def pp(v):
+        deja_vus[v]=True
+        for w in G[v]:
+            if not deja_vus[w]:
+                pp(w)
+        liste_cc[-1].append(v)
+    for i in range(n):
+        if not deja_vus[i]:
+            liste_cc.append([])
+            pp(i)
+    return liste_cc
+
+# Renvoie les élements dans la même composante connexe de i dans G
+def comp_connexes(g,i):
+    t=compo_connexes(g)
+    for l in t:
+        if i in l:
+            return l
+
+# Renvoie 1 avec probabilité p, 0 sinon
+def bernoulli(p):
+    x=random()
+    if x<=p:
+        return 1
+    else: return 0
+
+# Tracé de l'évolution de la probabilité d'existence d'un noeud isolé en fonction de n (à c fixé)
+def noeud_isole(c):
+    X=[10,100,200,300,400,500,600,800,900,950,1000,1050,1100]
+    Y=[]
+    for n in X:
+        s=0
+        for k in range(30):
+            g=[[] for i in range(n)]
+            p=c*log(n)/n
+            for i in range(n):
+                for j in range(i+1,n):
+                    if bernoulli(p):
+                        g[i].append(j)
+                        g[j].append(i)
+            L=compo_connexes(g)
+            b=False
+            for i in range(len(L)):
+                if len(L[i])==1:
+                    b=True
+            if b:
+                s+=1
+        Y.append(s/30)
+    plt.scatter(X,Y)
+    plt.show()
+
+# Tracé de l'évolution de la probabilité de connexité de G(n,p) en fonction de n (à c fixé)
+def connexe(c):
+    X=[10,100,200,300,400,500,600,800,900,950,1000,1050,1100]
+    Y=[]
+    for n in X:
+        s=0
+        for k in range(30):
+            g=[[] for i in range(n)]
+            p=c*log(n)/n
+            for i in range(n):
+                for j in range(i+1,n):
+                    if bernoulli(p):
+                        g[i].append(j)
+                        g[j].append(i)
+            L=compo_connexes(g)
+            if len(L)==1:
+                s+=1
+        Y.append(s/30)
+    plt.scatter(X,Y)
+    plt.show()
+
+# Tracé de la probabilité que G(n,p) ait k points isolés en fonction de k (à c fixé)
+def loi_poisson(c,m):
+    n=150
+    X=[i for i in range(n+1)]
+    Y=[0 for i in range(n+1)]
+    for k in range(m):
+        s=0
+        g=[[] for i in range(n)]
+        p=(c+log(n))/n
+        for i in range(n):
+            for j in range(i+1,n):
+                if bernoulli(p):
+                    g[i].append(j)
+                    g[j].append(i)
+        L=compo_connexes(g)
+        for i in range(len(L)):
+            if len(L[i])==1:
+                s+=1
+        Y[s]+=1/m
+    plt.scatter(X,Y)
+    lambd=exp(-c)
+    Z=[(exp(-lambd)*(lambd**k)/factorial(k)) for k in range(n+1)]
+    plt.plot(X,Z,color='red')
+    plt.show()
